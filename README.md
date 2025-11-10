@@ -201,7 +201,7 @@ El artefacto `.uf2` quedará en `build/`. Para cargarlo, monte el dispositivo en
 ```
 .
 ├── CMakeLists.txt
-├── external/
+├── 3rd_party/
 │   └── pico-sdk/          # submódulo
 ├── include/
 │   ├── config.h           # pines, dirección I²C, FIFO_SIZE, flags
