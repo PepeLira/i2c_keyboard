@@ -1,0 +1,45 @@
+#ifndef LAYOUT_DEFAULT_H
+#define LAYOUT_DEFAULT_H
+
+#include <stdint.h>
+#include "config.h"
+#include "protocol.h"
+
+#define KEY_NONE 0x00
+
+static const uint8_t matrix_layout[MATRIX_ROWS][MATRIX_COLS] = {
+    {0x04, 0x05, 0x06, 0x07, 0x08, 0x09},
+    {0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F},
+    {0x10, 0x11, 0x12, 0x13, 0x14, 0x15},
+    {0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B},
+    {0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21},
+    {0x22, 0x23, 0x24, 0x25, 0x26, 0x27},
+    {0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D}
+};
+
+static const uint8_t discrete_layout[DISCRETE_KEY_COUNT] = {
+    0xE0, // Cursor up (Ctrl placeholder)
+    0xE1, // Cursor down
+    0xE2, // Cursor left
+    0xE3, // Cursor right
+    0xE4, // Cursor center
+    0x2E, // Key 6
+    0x2F, // Key 7
+    0x30, // Key 8
+    0x31, // Key 9
+    0x32, // Key 10
+    0x33  // Key 11
+};
+
+static inline uint16_t modifier_mask_for_key(uint8_t code) {
+    switch (code) {
+    case 0xE0: return MOD_CTRL;
+    case 0xE1: return MOD_SHIFT;
+    case 0xE2: return MOD_ALT;
+    case 0xE3: return MOD_GUI;
+    case 0xE4: return MOD_FN;
+    default: return 0;
+    }
+}
+
+#endif // LAYOUT_DEFAULT_H

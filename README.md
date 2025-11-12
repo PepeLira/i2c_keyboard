@@ -69,16 +69,17 @@ El dispositivo se presenta como un esclavo I²C con una página de registros sim
 
 | Dirección | Nombre          | Descripción                                                       |
 | --------- | --------------- | ----------------------------------------------------------------- |
-| `0x00`    | `DEV_ID`        | Identificador (ej. `0xB0`)                                        |
-| `0x01`    | `FW_VERSION`    | Mayor.menor (ej. `0x01 0x00`)                                     |
-| `0x02`    | `STATUS`        | Bits: `FIFO_EMPTY`, `FIFO_FULL`, `MOD_MASK_VALID`, `ERR`          |
-| `0x03`    | `MOD_MASK`      | Máscara de modificadores activos (Ctrl/Shift/Alt/Meta/Func, etc.) |
-| `0x04`    | `FIFO_COUNT`    | Cantidad de eventos en FIFO                                       |
-| `0x05`    | `FIFO_POP` (R)  | Leer = extrae un evento (hasta 8 bytes)                           |
-| `0x06`    | `CFG_FLAGS`     | Flags de configuración (debounce, diodos, modo INT, etc.)         |
-| `0x07`    | `CURSOR_STATE`  | Estado de las 5 teclas de cursor (bits UP/DOWN/LEFT/RIGHT/CENTER) |
-| `0x08`    | `LED_STATE` (W) | Escribir color directo (GRB) o *preset*                           |
-| `0x09`    | `SCAN_RATE`     | Tasa de escaneo en Hz (ej. 1–2 kHz)                               |
+| `0x00`    | `DEV_ID`            | Identificador (ej. `0xB0`)                                        |
+| `0x01`    | `FW_VERSION_MAJOR` | Byte mayor de versión (ej. `0x01`)                               |
+| `0x02`    | `FW_VERSION_MINOR` | Byte menor de versión (ej. `0x00`)                               |
+| `0x03`    | `STATUS`            | Bits: `FIFO_EMPTY`, `FIFO_FULL`, `MOD_MASK_VALID`, `ERR`          |
+| `0x04`    | `MOD_MASK`          | Máscara de modificadores activos (Ctrl/Shift/Alt/Meta/Fn)        |
+| `0x05`    | `FIFO_COUNT`        | Cantidad de eventos en FIFO                                       |
+| `0x06`    | `FIFO_POP` (R)      | Leer = extrae evento (4 bytes rotativos)                          |
+| `0x07`    | `CFG_FLAGS`         | Flags de configuración (debounce, diodos, modo INT, etc.)         |
+| `0x08`    | `CURSOR_STATE`      | Estado de las 5 teclas de cursor (bits UP/DOWN/LEFT/RIGHT/CENTER) |
+| `0x09-0x0B` | `LED_STATE` (W)   | Escribir color directo en formato GRB                             |
+| `0x0C`    | `SCAN_RATE`         | Tasa de escaneo en Hz (ej. 1–2 kHz)                               |
 
 > La lectura de `FIFO_POP` devuelve un **paquete de evento**. Si la FIFO está vacía, devuelve un evento `NOP` o `0x00`.
 
