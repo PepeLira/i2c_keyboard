@@ -35,6 +35,20 @@ El diseño se inspira en el proyecto **i2c_puppet** de Solder Party (`git@github
 * **Teclas discretas:** 11 líneas dedicadas (GPIO con *pull-down*), de las cuales 5 están mapeadas a `CURSOR_UP/DOWN/LEFT/RIGHT/CENTER`.
 * **Indicadores:** 1 LED NeoPixel direccionado vía PIO o bit-bang (PIO recomendado).
 
+### Arquitectura de software
+
+El firmware está dividido en módulos auto-contenidos que facilitan su mantenimiento y pruebas:
+
+* `matrix_scan.c`: escaneo y *debounce* de la matriz 7×6 mediante *callbacks*.
+* `discrete_keys.c`: gestión de las 11 teclas con lógica de anti-rebote y mapeo a índices lógicos.
+* `fifo.c`: FIFO circular de 64 entradas para eventos normalizados.
+* `i2c_slave.c`: controlador I²C en modo esclavo que expone el banco de registros, despacha la FIFO y gobierna la línea INT opcional.
+* `neopixel.c` + `pio/neopixel.pio`: controlador PIO dedicado al WS2812/APA106.
+* `layout_default.c`: mapeos físico→lógico y paleta de colores por defecto.
+* `main.c`: ciclo principal (1 kHz) que integra escáneres, actualiza modificadores, cursor, LED y publica eventos en la FIFO.
+
+Cada módulo expone un encabezado en `include/` para mantener bajo acoplamiento. `main.c` es el único responsable de combinar eventos físicos con el layout lógico y actualizar el `register_bank_t` consumido por `i2c_slave.c`. Los modificadores se representan en una máscara HID de 8 bits, y el LED cambia automáticamente entre los colores por defecto, modificador activo y error.
+
 ---
 
 ## Mapa de hardware
@@ -100,6 +114,8 @@ Byte 3: TS_LO     (timestamp relativo en ticks; opcionalmente combine con un reg
 
 > **INT opcional:** al *pushear* un evento válido en FIFO se pulsa `INT` (activo-bajo), el host limpia leyendo `FIFO_POP`.
 
+> **Liberación de cursor:** al soltar una tecla de cursor el código del evento se entrega como `CURSOR_x | 0x80` para distinguirlo de la pulsación. El registro `CURSOR_STATE` mantiene los bits activos en todo momento.
+
 ### Tamaño de FIFO
 
 * Por defecto **64 eventos** (configurable por `#define FIFO_SIZE`).
@@ -141,58 +157,36 @@ static const uint16_t discrete_map[11] = {
 
 ## Indicadores LED (NeoPixel)
 
-* **Estados por defecto:**
+El firmware mantiene automáticamente el estado del NeoPixel según la condición del teclado:
 
-  * **Sin modificadores:** NeoPixel tenue blanco.
-  * **Shift/Ctrl/Alt/Meta/Fn:** color por bit activo (combinaciones → mezcla).
-  * **Error (FIFO FULL):** rojo intermitente.
-  * **Actividad (key event):** *blink* corto.
+* **Verde tenue (`LED_COLOR_DEFAULT`)** → funcionamiento normal sin modificadores activos.
+* **Rojo (`LED_COLOR_ACTIVE`)** → al menos un modificador activo (Ctrl, Shift, Alt, GUI).
+* **Amarillo (`LED_COLOR_ERROR`)** → condición de error (actualmente desbordes de FIFO).
 
-* **Control:** escribir en `LED_STATE`:
-
-  * `0x00 0xGG 0xRR 0xBB` → color directo (GRB típico).
-  * `0x01 idx` → preset predefinido.
+El host puede sobrescribir el color escribiendo 3 bytes GRB consecutivos en el registro `LED_STATE` (`0x08`).
 
 ---
 
 ## Construcción
 
-### 1) Requisitos
+1. **Requisitos:** CMake ≥ 3.13, toolchain ARM (`arm-none-eabi-gcc`), `ninja` o `make`, Git.
+2. **Pico SDK:** el repositorio espera el SDK en `3rd_party/pico-sdk`. Inicialícelo con:
 
-* **Toolchain ARM** (`arm-none-eabi-gcc`), **CMake** ≥ 3.13, **Git**.
-* **Pico SDK** como submódulo.
+   ```bash
+   git submodule update --init --recursive
+   ```
 
-### 2) Clonar y agregar Pico SDK
+   Si no hay acceso a Internet, descargue manualmente el SDK y colóquelo en esa ruta.
 
-```bash
-# Clonar este repo
-git clone <URL_DE_ESTE_REPO>.git rp2040-keyboard-i2c
-cd rp2040-keyboard-i2c
+3. **Configurar y compilar:**
 
-# Agregar Pico SDK como submódulo (rama estable recomendada)
-git submodule add https://github.com/raspberrypi/pico-sdk external/pico-sdk
-git -C external/pico-sdk submodule update --init  # trae tinyusb, etc.
-```
+   ```bash
+   mkdir -p build && cd build
+   cmake -G Ninja -DPICO_BOARD=pico -DCMAKE_BUILD_TYPE=Release ..
+   cmake --build .
+   ```
 
-> Si el repo ya existía: `git submodule update --init --recursive`.
-
-### 3) Configurar entorno
-
-Definir `PICO_SDK_PATH` (si no se usa ruta relativa en `CMakeLists.txt`):
-
-```bash
-export PICO_SDK_PATH=$(pwd)/external/pico-sdk
-```
-
-### 4) Compilar
-
-```bash
-mkdir -p build && cd build
-cmake -DPICO_BOARD=pico -DCMAKE_BUILD_TYPE=Release ..
-make -j
-```
-
-El artefacto `.uf2` quedará en `build/`. Para cargarlo, monte el dispositivo en modo **BOOTSEL** y copie el `.uf2`.
+4. **Flasheo:** copie `i2c_keyboard.uf2` al RP2040 montado en modo **BOOTSEL**.
 
 ---
 
@@ -256,6 +250,12 @@ static const uint8_t DISCRETE_PINS[11] = {15,16,17,18,19,20,21,22,23,24,25};
 * **INT line** (si se usa): confirme que al presionar una tecla el host recibe la interrupción y puede leer `FIFO_POP`.
 * **Anti-rebote:** validar que no se generan eventos duplicados.
 * **Cursor:** verificar codificación `UP/DOWN/LEFT/RIGHT/CENTER`.
+
+---
+
+## Herramientas de host
+
+El directorio `test/host_tools/` contiene `i2c_dump.py`, un script en Python que emplea `smbus2` para leer los registros expuestos y vaciar la FIFO de eventos desde un PC Linux. Es útil para automatizar pruebas de integración y depuración de layouts.
 
 ---
 
