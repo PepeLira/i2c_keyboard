@@ -41,85 +41,96 @@ Este archivo describe la relación entre posiciones físicas (`A1..G6`, `FN1..FN
 ## Arquitectura
 
 * **SoC:** RP2040, doble núcleo.
-* **SDK:** Pico SDK (TinyUSB opcional).
-* **Interfaces HID:**
+* **SDK:** Pico SDK (TinyUSB deshabilitable; este firmware no requiere USB para operación, solo para *logging* si se desea).
+* **Interfaz host:** I²C esclavo con FIFO de eventos (key down/up, modificadores, especiales).
+* **Escaneo:** controlador de matriz con prevención de *ghosting* por configuración (opcional diodos; ver sección de *debouncing*).
+* **Teclas discretas:** 11 líneas dedicadas (GPIO con *pull-down*), de las cuales 5 están mapeadas a `CURSOR_UP/DOWN/LEFT/RIGHT/CENTER`.
+* **Indicadores:** 1 LED NeoPixel direccionado vía PIO o bit-bang (PIO recomendado).
 
-  * HID over I2C (principal).
-  * HID USB (pruebas).
-* **Entrada física:**
+### Arquitectura de software
 
-  * Matriz 7×6 con escaneo continuo.
-  * 11 teclas discretas (pull-down).
-* **Limitaciones de hardware:**
+El firmware está dividido en módulos auto-contenidos que facilitan su mantenimiento y pruebas:
 
-  * La matriz **no tiene diodos**, por lo que se implementa **anti-ghosting por software**.
-* **Indicador visual:**
+* `matrix_scan.c`: escaneo y *debounce* de la matriz 7×6 mediante *callbacks*.
+* `discrete_keys.c`: gestión de las 11 teclas con lógica de anti-rebote y mapeo a índices lógicos.
+* `fifo.c`: FIFO circular de 64 entradas para eventos normalizados.
+* `i2c_slave.c`: controlador I²C en modo esclavo que expone el banco de registros, despacha la FIFO y gobierna la línea INT opcional.
+* `neopixel.c` + `pio/neopixel.pio`: controlador PIO dedicado al WS2812/APA106.
+* `layout_default.c`: mapeos físico→lógico y paleta de colores por defecto.
+* `main.c`: ciclo principal (1 kHz) que integra escáneres, actualiza modificadores, cursor, LED y publica eventos en la FIFO.
 
-  * 1 NeoPixel controlado por PIO.
+Cada módulo expone un encabezado en `include/` para mantener bajo acoplamiento. `main.c` es el único responsable de combinar eventos físicos con el layout lógico y actualizar el `register_bank_t` consumido por `i2c_slave.c`. Los modificadores se representan en una máscara HID de 8 bits, y el LED cambia automáticamente entre los colores por defecto, modificador activo y error.
 
 ---
 
 ## Mapa de hardware
 
-Los GPIO deben ajustarse al hardware real y reflejarse en `config.h`.
+> Ajuste los GPIO a su diseño. Los nombres son ejemplos por defecto.
 
-* **I²C:** SDA, SCL
-* **Matriz:** ROW_PINS[7], COL_PINS[6]
-* **Teclas discretas (11):** DISCRETE_PINS[11]
-* **NeoPixel:** NEOPIXEL_GPIO
-* **USB:** Pines nativos del RP2040
+| Función                         | GPIO (ejemplo) | Notas                                                   |
+| ------------------------------- | -------------- | ------------------------------------------------------- |
+| I²C SDA                         | GP0            | Pull-up externo 4.7–10 kΩ                               |
+| I²C SCL                         | GP1            | Pull-up externo 4.7–10 kΩ                               |
+| Filas matriz (7)                | GP2–GP8        | Configuradas como salidas (o entradas según escaneo)    |
+| Columnas matriz (6)             | GP9–GP14       | Configuradas como entradas con *pull-down*              |
+| Teclas independientes (11)      | GP15–GP25      | Entradas con *pull-down*                                |
+| NeoPixel DIN                    | GP26           | Un solo LED (WS2812/APA106)                             |
+| INT (opcional)                  | GP27           | Línea de interrupción al host al colocar evento en FIFO |
+| Address pins (opcional, 2 bits) | GP28, GP29     | Selección de dirección I²C                              |
 
----
-
-## HID sobre I²C
-
-El firmware implementa **HID over I²C**, exponiéndose como un teclado estándar.
-
-Incluye:
-
-* Descriptor HID para teclado.
-* Report descriptor derivado del contenido de keyboard_layout.json.
-* Reportes HID con:
-
-  * Modificadores (Shift, Alt, Ctrl, GUI, Fn).
-  * Lista de keycodes activos (limitada por anti-ghosting).
-
-El host interpreta los reportes HID sin requerir configuraciones especiales.
-
-### Anti-ghosting por software
-
-Debido a la ausencia de diodos:
-
-* Se limita la cantidad de teclas simultáneas reportadas (ej. 2 o 3).
-* Las combinaciones inseguras se descartan.
-* Las teclas modificadoras pueden excluirse del límite.
+> **Nota:** Configure `CMakeLists.txt`/`config.h` para reflejar su *pinout* definitivo.
 
 ---
 
-## HID por USB (modo prueba)
+## Protocolo I²C y FIFO
 
-Si se habilita TinyUSB, la placa se comporta como un teclado USB estándar.
+El dispositivo se presenta como un esclavo I²C con una página de registros simples y una **FIFO de eventos** de tamaño fijo.
 
-* Útil para pruebas rápidas en un PC.
-* El report descriptor USB es el mismo que el de I²C (misma lógica).
-* Permite validar layout, capas y modificadores sin un sistema I²C host.
+### Dirección I²C
 
----
+* Base: `0x32` (ejemplo).
+* Bits A0–A1 opcionales desde pines `ADDR0/ADDR1` → `0x32 | (ADDR1<<1) | ADDR0`.
 
-## Layouts y keyboard_layout.json
+### Registros
 
-El archivo JSON define completamente el comportamiento lógico del teclado:
+| Dirección | Nombre          | Descripción                                                       |
+| --------- | --------------- | ----------------------------------------------------------------- |
+| `0x00`    | `DEV_ID`        | Identificador (ej. `0xB0`)                                        |
+| `0x01`    | `FW_VERSION`    | Mayor.menor (ej. `0x01 0x00`)                                     |
+| `0x02`    | `STATUS`        | Bits: `FIFO_EMPTY`, `FIFO_FULL`, `MOD_MASK_VALID`, `ERR`          |
+| `0x03`    | `MOD_MASK`      | Máscara de modificadores activos (Ctrl/Shift/Alt/Meta/Func, etc.) |
+| `0x04`    | `FIFO_COUNT`    | Cantidad de eventos en FIFO                                       |
+| `0x05`    | `FIFO_POP` (R)  | Leer = extrae un evento (hasta 8 bytes)                           |
+| `0x06`    | `CFG_FLAGS`     | Flags de configuración (debounce, diodos, modo INT, etc.)         |
+| `0x07`    | `CURSOR_STATE`  | Estado de las 5 teclas de cursor (bits UP/DOWN/LEFT/RIGHT/CENTER) |
+| `0x08`    | `LED_STATE` (W) | Escribir color directo (GRB) o *preset*                           |
+| `0x09`    | `SCAN_RATE`     | Tasa de escaneo en Hz (ej. 1–2 kHz)                               |
 
-* Mapeo matriz: `"A3": ["a", "A", "á"]`, `"A6": ["1", "!", "F1"]`
+> La lectura de `FIFO_POP` devuelve un **paquete de evento**. Si la FIFO está vacía, devuelve un evento `NOP` o `0x00`.
 
-  * Índice 0 → sin modificador
-  * Índice 1 → Shift
-  * Índice 2 → Fn (o el modificador correspondiente según se defina)
-* Mapeo teclas FN: `"FN1": ["Escape"]`, `"FN2": ["ArrowUp"]`, etc.
-* Modificadores: Shift, Ctrl, Alt, Fn, etc.
-* Capas: definidas mediante el índice en la lista, igual que en `i2c_puppet`.
+### Formato de evento (FIFO)
 
-Permite cambiar completamente el idioma del teclado o el layout sin tocar el firmware.
+Tamaño fijo de 4 bytes por evento (recomendado por simplicidad):
+
+```
+Byte 0: TYPE      (0x01=KEY_DOWN, 0x02=KEY_UP, 0x03=MOD_CHANGE, 0x04=CURSOR, 0x05=SPECIAL, 0x00=NOP)
+Byte 1: CODE      (keycode lógico o cursor code)
+Byte 2: MOD_MASK  (estado de modificadores tras el evento)
+Byte 3: TS_LO     (timestamp relativo en ticks; opcionalmente combine con un registro TS_HI)
+```
+
+* **KEY_DOWN/KEY_UP:** `CODE` es keycode lógico (layout-aware).
+* **MOD_CHANGE:** `CODE` = máscara de bits que cambió.
+* **CURSOR:** `CODE` en {UP=1, DOWN=2, LEFT=3, RIGHT=4, CENTER=5}.
+* **SPECIAL:** reservado (p. ej., *layer toggle*, *macro trigger*).
+
+> **INT opcional:** al *pushear* un evento válido en FIFO se pulsa `INT` (activo-bajo), el host limpia leyendo `FIFO_POP`.
+
+> **Liberación de cursor:** al soltar una tecla de cursor el código del evento se entrega como `CURSOR_x | 0x80` para distinguirlo de la pulsación. El registro `CURSOR_STATE` mantiene los bits activos en todo momento.
+
+### Tamaño de FIFO
+
+* Por defecto **64 eventos** (configurable por `#define FIFO_SIZE`).
 
 ---
 
@@ -161,47 +172,36 @@ Estos pares (a→á, n→ñ, etc.) deben definirse explícitamente en keyboard_l
 
 ## Indicadores LED (NeoPixel)
 
-El NeoPixel indica estados importantes:
+El firmware mantiene automáticamente el estado del NeoPixel según la condición del teclado:
 
-* Sin modificadores → blanco tenue.
-* Shift → color dedicado (ej. azul).
-* Alt → color especial (ej. amarillo).
-* Ctrl → otro color.
-* Fn → otro color.
-* Sticky permanente → brillo más alto.
-* Error o ghosting → rojo parpadeante.
-* Tecla presionada → blink corto.
+* **Verde tenue (`LED_COLOR_DEFAULT`)** → funcionamiento normal sin modificadores activos.
+* **Rojo (`LED_COLOR_ACTIVE`)** → al menos un modificador activo (Ctrl, Shift, Alt, GUI).
+* **Amarillo (`LED_COLOR_ERROR`)** → condición de error (actualmente desbordes de FIFO).
 
-Todo esto puede ajustarse en `neopixel.c`.
+El host puede sobrescribir el color escribiendo 3 bytes GRB consecutivos en el registro `LED_STATE` (`0x08`).
 
 ---
 
 ## Construcción
 
-### Requisitos
+1. **Requisitos:** CMake ≥ 3.13, toolchain ARM (`arm-none-eabi-gcc`), `ninja` o `make`, Git.
+2. **Pico SDK:** el repositorio espera el SDK en `3rd_party/pico-sdk`. Inicialícelo con:
 
-* ARM gcc (arm-none-eabi-gcc)
-* CMake ≥ 3.13
-* Pico SDK
-* Git
+   ```bash
+   git submodule update --init --recursive
+   ```
 
-### Clonar y agregar submódulo Pico SDK
+   Si no hay acceso a Internet, descargue manualmente el SDK y colóquelo en esa ruta.
 
-git clone <URL_REPO>.git
-cd rp2040-keyboard
-git submodule add [https://github.com/raspberrypi/pico-sdk](https://github.com/raspberrypi/pico-sdk) external/pico-sdk
-git -C external/pico-sdk submodule update --init --recursive
+3. **Configurar y compilar:**
 
-### Configurar entorno
+   ```bash
+   mkdir -p build && cd build
+   cmake -G Ninja -DPICO_BOARD=pico -DCMAKE_BUILD_TYPE=Release ..
+   cmake --build .
+   ```
 
-export PICO_SDK_PATH=$(pwd)/external/pico-sdk
-
-### Compilar
-
-mkdir build
-cd build
-cmake ..
-cmake --build . --target rp2040_keyboard_hid
+4. **Flasheo:** copie `i2c_keyboard.uf2` al RP2040 montado en modo **BOOTSEL**.
 
 ---
 
@@ -248,29 +248,16 @@ Debe coincidir con la estructura del teclado y con keyboard_layout.json.
 
 ## Pruebas
 
-### USB HID
+* **Herramienta de host** (`test/host_tools`): lectura de registros y *polling* de FIFO.
+* **INT line** (si se usa): confirme que al presionar una tecla el host recibe la interrupción y puede leer `FIFO_POP`.
+* **Anti-rebote:** validar que no se generan eventos duplicados.
+* **Cursor:** verificar codificación `UP/DOWN/LEFT/RIGHT/CENTER`.
 
-1. Habilitar ENABLE_USB_HID
-2. Conectar RP2040 al PC
-3. Verificar:
+---
 
-   * Escritura correcta
-   * Sticky keys
-   * Alt internacional
-   * Comportamiento de Fn
+## Herramientas de host
 
-### HID I²C
-
-* Conectar como HID-over-I2C
-* Verificar entradas vía `evtest` o `libinput`
-* Probar eventos con combinaciones de modificadores
-* Probar sticky keys
-
-### NeoPixel
-
-* Confirmar cambios de color al activar/desactivar modificadores
-* Probar blink al presionar teclas
-* Simular errores para ver parpadeo rojo
+El directorio `test/host_tools/` contiene `i2c_dump.py`, un script en Python que emplea `smbus2` para leer los registros expuestos y vaciar la FIFO de eventos desde un PC Linux. Es útil para automatizar pruebas de integración y depuración de layouts.
 
 ---
 
