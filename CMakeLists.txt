@@ -17,9 +17,16 @@ add_executable(i2c_keyboard
     src/neopixel.c
 )
 
-pico_generate_pio_header(i2c_keyboard ${CMAKE_CURRENT_LIST_DIR}/pio/neopixel.pio)
+pico_generate_pio_header(
+    i2c_keyboard
+    ${CMAKE_CURRENT_LIST_DIR}/pio/neopixel.pio
+    OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/pio
+)
 
-target_include_directories(i2c_keyboard PRIVATE include)
+target_include_directories(i2c_keyboard PRIVATE
+    include
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 target_link_libraries(i2c_keyboard
     pico_stdlib

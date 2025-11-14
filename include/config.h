@@ -14,8 +14,8 @@
 #define SDA_GPIO        0
 #define SCL_GPIO        1
 
-#define ROW_COUNT       7
-#define COL_COUNT       6
+#define ROW_COUNT       6
+#define COL_COUNT       7
 
 #define DISCRETE_COUNT  11
 
@@ -23,7 +23,7 @@ extern const uint8_t ROW_PINS[ROW_COUNT];
 extern const uint8_t COL_PINS[COL_COUNT];
 extern const uint8_t DISCRETE_PINS[DISCRETE_COUNT];
 
-#define NEOPIXEL_GPIO   26
+#define NEOPIXEL_GPIO   28
 #define NEOPIXEL_COUNT  1
 
 #define FW_VERSION_MAJOR 1

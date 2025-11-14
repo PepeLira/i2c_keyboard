@@ -11,7 +11,7 @@
 #include "neopixel.h"
 #include "pico/stdlib.h"
 
-#define I2C_INSTANCE i2c0
+#define I2C_PORT i2c0
 
 struct i2c_slave_context {
     register_bank_t *regs;
@@ -183,7 +183,7 @@ static void write_register_byte(struct i2c_slave_context *ctx, uint8_t value) {
 
 static void i2c_slave_irq_handler(void) {
     struct i2c_slave_context *ctx = &g_ctx;
-    i2c_hw_t *hw = I2C_INSTANCE->hw;
+    i2c_hw_t *hw = I2C_PORT->hw;
 
     while (hw->intr_stat) {
         uint32_t status = hw->intr_stat;
@@ -244,8 +244,8 @@ i2c_slave_context_t *i2c_slave_init(register_bank_t *regs,
     gpio_put(INT_GPIO, 1);
 #endif
 
-    i2c_init(I2C_INSTANCE, 100 * 1000);
-    i2c_set_slave_mode(I2C_INSTANCE, true, I2C_ADDR_BASE);
+    i2c_init(I2C_PORT, 100 * 1000);
+    i2c_set_slave_mode(I2C_PORT, true, I2C_ADDR_BASE);
 
     irq_set_exclusive_handler(I2C0_IRQ, i2c_slave_irq_handler);
     irq_set_enabled(I2C0_IRQ, true);

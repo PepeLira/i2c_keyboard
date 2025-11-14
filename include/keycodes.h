@@ -108,4 +108,17 @@
 #define KC_MACRO0      0xF2
 #define KC_MACRO1      0xF3
 
+// Custom functions for mouse/navigation features referenced by keyboard_layout.json
+#define KC_LEFT_CLICK          0xF4
+#define KC_RIGHT_CLICK         0xF5
+#define KC_MIDDLE_CLICK        0xF6
+#define KC_MOUSE_LEFT          0xF7
+#define KC_MOUSE_RIGHT         0xF8
+#define KC_MOUSE_UP            0xF9
+#define KC_MOUSE_DOWN          0xFA
+#define KC_MOUSE_SCROLL_LEFT   0xFB
+#define KC_MOUSE_SCROLL_RIGHT  0xFC
+#define KC_MOUSE_SCROLL_UP     0xFD
+#define KC_MOUSE_SCROLL_DOWN   0xFE
+
 #endif // KEYCODES_H

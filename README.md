@@ -1,4 +1,4 @@
-# Firmware RP2040 – Teclado Matricial 7×6 + 11 teclas independientes con HID nativo por I²C, HID USB y NeoPixel
+# Firmware RP2040 – Teclado Matricial 6×7 + 11 teclas independientes con HID nativo por I²C, HID USB y NeoPixel
 
 Este repositorio contiene el firmware para una placa basada en **RP2040** (Raspberry Pi Pico o equivalente) que expone un **teclado HID estándar** mediante:
 
@@ -7,7 +7,7 @@ Este repositorio contiene el firmware para una placa basada en **RP2040** (Raspb
 
 La disposición física incluye:
 
-* Una **matriz 7×6** (7 filas × 6 columnas).
+* Una **matriz 6×7** (6 filas numeradas `1..6` × 7 columnas etiquetadas `A..G`).
 * **11 teclas independientes** definidas como `FN1..FN12` (sin `FN7`), conectadas como *pull-down*.
 * **5 teclas de cursor** dentro de las FN.
 * **Un NeoPixel** (WS2812/APA106) para indicar estados.
@@ -51,7 +51,7 @@ Este archivo describe la relación entre posiciones físicas (`A1..G6`, `FN1..FN
 
 El firmware está dividido en módulos auto-contenidos que facilitan su mantenimiento y pruebas:
 
-* `matrix_scan.c`: escaneo y *debounce* de la matriz 7×6 mediante *callbacks*.
+* `matrix_scan.c`: escaneo y *debounce* de la matriz 6×7 mediante *callbacks*.
 * `discrete_keys.c`: gestión de las 11 teclas con lógica de anti-rebote y mapeo a índices lógicos.
 * `fifo.c`: FIFO circular de 64 entradas para eventos normalizados.
 * `i2c_slave.c`: controlador I²C en modo esclavo que expone el banco de registros, despacha la FIFO y gobierna la línea INT opcional.
@@ -71,12 +71,12 @@ Cada módulo expone un encabezado en `include/` para mantener bajo acoplamiento.
 | ------------------------------- | -------------- | ------------------------------------------------------- |
 | I²C SDA                         | GP0            | Pull-up externo 4.7–10 kΩ                               |
 | I²C SCL                         | GP1            | Pull-up externo 4.7–10 kΩ                               |
-| Filas matriz (7)                | GP2–GP8        | Configuradas como salidas (o entradas según escaneo)    |
-| Columnas matriz (6)             | GP9–GP14       | Configuradas como entradas con *pull-down*              |
-| Teclas independientes (11)      | GP15–GP25      | Entradas con *pull-down*                                |
-| NeoPixel DIN                    | GP26           | Un solo LED (WS2812/APA106)                             |
+| Filas matriz (6)                | GP7, GP8, GP9, GP10, GP11, GP2 | Corresponden a las filas `1..6` definidas en keyboard_layout.json |
+| Columnas matriz (7)             | GP12, GP13, GP14, GP15, GP16, GP17, GP18 | Columnas etiquetadas `A..G` con *pull-down*             |
+| Teclas independientes (11)      | GP19, GP20, GP21, GP22, GP3, GP4, GP5, GP6, GP23, GP24, GP25 | FN1..FN12 (sin FN7), todas como entradas con *pull-down* |
+| NeoPixel DIN                    | GP28           | Un solo LED (WS2812/APA106)                             |
 | INT (opcional)                  | GP27           | Línea de interrupción al host al colocar evento en FIFO |
-| Address pins (opcional, 2 bits) | GP28, GP29     | Selección de dirección I²C                              |
+| Address pins (opcional, 2 bits) | (definir según hardware) | Selección de dirección I²C si se requiere            |
 
 > **Nota:** Configure `CMakeLists.txt`/`config.h` para reflejar su *pinout* definitivo.
 
