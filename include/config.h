@@ -7,6 +7,9 @@
 #define POWER_BUTTON    29
 #define NEOPIXEL_GPIO   28
 
+// Event system
+#define EVENT_QUEUE_LENGTH 32
+
 // Power Button Configuration
 #define DEBOUNCE_MS         20
 #define POWER_HOLD_MS       3000   // Button must stay low for 3 seconds

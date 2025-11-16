@@ -15,8 +15,11 @@ add_subdirectory(pio)
 # Create executable
 add_executable(i2c_keyboard
     src/main.c
+    src/event.c
+    src/button.c
+    src/latch.c
+    src/power_fsm.c
     src/neopixel.c
-    src/power_button.c
 )
 
 # Link pico standard library
