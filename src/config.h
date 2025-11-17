@@ -1,0 +1,15 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// GPIO assignments
+#define CONFIG_POWER_LATCH_GPIO 29
+#define CONFIG_MODIFIER_GPIO 24
+#define CONFIG_LED_GPIO 28
+
+// LED colors encoded as 0xRRGGBB
+#define CONFIG_COLOR_IDLE 0x001400
+#define CONFIG_COLOR_POWER 0x140000
+#define CONFIG_COLOR_MOD 0x200C00
+#define CONFIG_COLOR_PULSE 0x200400
+
+#endif  // CONFIG_H
