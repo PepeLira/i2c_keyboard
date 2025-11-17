@@ -2,7 +2,7 @@
 
 #include "hardware/gpio.h"
 
-static uint latch_pin = 29;
+static uint32_t latch_pin = 29;
 static bool latch_closed = false;
 
 static void configure_default_input(void) {
@@ -11,7 +11,7 @@ static void configure_default_input(void) {
     gpio_disable_pulls(latch_pin);
 }
 
-void power_latch_init(uint pin) {
+void power_latch_init(uint32_t pin) {
     latch_pin = pin;
     gpio_init(latch_pin);
     gpio_set_dir(latch_pin, GPIO_IN);

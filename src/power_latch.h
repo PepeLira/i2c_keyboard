@@ -6,7 +6,7 @@
 
 #include "pico/types.h"
 
-void power_latch_init(uint pin);
+void power_latch_init(uint32_t pin);
 void power_latch_close(void);
 void power_latch_open(void);
 bool power_latch_is_closed(void);

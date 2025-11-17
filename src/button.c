@@ -2,7 +2,7 @@
 
 #include "hardware/gpio.h"
 
-void button_init(button_t *button, uint pin, bool active_high, uint32_t debounce_ms, bool enable_pull_up,
+void button_init(button_t *button, uint32_t pin, bool active_high, uint32_t debounce_ms, bool enable_pull_up,
                  bool enable_pull_down) {
     if (!button) {
         return;

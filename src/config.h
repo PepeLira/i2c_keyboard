@@ -3,7 +3,7 @@
 
 // GPIO assignments
 #define CONFIG_POWER_LATCH_GPIO 29
-#define CONFIG_MODIFIER_GPIO 24
+#define CONFIG_MODIFIER_GPIO 22
 #define CONFIG_LED_GPIO 28
 
 // LED colors encoded as 0xRRGGBB
@@ -11,5 +11,11 @@
 #define CONFIG_COLOR_POWER 0x140000
 #define CONFIG_COLOR_MOD 0x200C00
 #define CONFIG_COLOR_PULSE 0x200400
+
+// Timers
+#define DEBOUNCE_MS 30
+#define STARTUP_WINDOW_MS 1000
+#define FIRST_PRESS_HOLD_MS 500
+#define LONG_PRESS_MS 3000
 
 #endif  // CONFIG_H

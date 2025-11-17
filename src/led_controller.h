@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-void led_controller_init(uint led_pin);
+void led_controller_init(uint32_t led_pin);
 void led_controller_set_power_pressed(bool pressed);
 void led_controller_set_modifier(bool pressed);
 void led_controller_pulse_short_press(uint32_t now_ms);

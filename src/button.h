@@ -7,7 +7,7 @@
 #include "pico/types.h"
 
 typedef struct {
-    uint pin;
+    uint32_t pin;
     bool active_high;
     uint32_t debounce_ms;
 
@@ -17,7 +17,7 @@ typedef struct {
     bool debouncing;
 } button_t;
 
-void button_init(button_t *button, uint pin, bool active_high, uint32_t debounce_ms, bool enable_pull_up,
+void button_init(button_t *button, uint32_t pin, bool active_high, uint32_t debounce_ms, bool enable_pull_up,
                  bool enable_pull_down);
 
 bool button_update(button_t *button, uint32_t now_ms);

@@ -71,9 +71,9 @@ static void refresh(uint32_t now_ms) {
     set_idle();
 }
 
-void led_controller_init(uint led_pin) {
+void led_controller_init(uint32_t led_pin) {
     led_init(led_pin);
-    blink_on = true;
+    blink_on = false;
     next_blink_toggle_ms = 0;
     power_pressed = false;
     modifier_active = false;
@@ -83,9 +83,10 @@ void led_controller_init(uint led_pin) {
 
 void led_controller_set_power_pressed(bool pressed) {
     power_pressed = pressed;
-    if (pressed) {
+    if (pressed && next_blink_toggle_ms == 0) {
         blink_on = true;
-        next_blink_toggle_ms = 0;
+        // Schedule first toggle in the future, not immediately
+        next_blink_toggle_ms = 1;
     }
 }
 

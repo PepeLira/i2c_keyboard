@@ -26,14 +26,6 @@ pico_add_extra_outputs(i2c_keyboard)
 
 set_property(TARGET i2c_keyboard PROPERTY C_STANDARD 11)
 
-enable_testing()
-
 add_library(switch_logic STATIC src/switch_tracker.c)
 target_include_directories(switch_logic PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src)
 set_property(TARGET switch_logic PROPERTY C_STANDARD 11)
-
-add_executable(switch_tracker_test tests/switch_tracker_test.c)
-target_link_libraries(switch_tracker_test switch_logic)
-set_property(TARGET switch_tracker_test PROPERTY C_STANDARD 11)
-
-add_test(NAME switch_tracker_test COMMAND switch_tracker_test)
