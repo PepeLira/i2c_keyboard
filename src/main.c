@@ -1,7 +1,12 @@
 #include "button.h"
 #include "config.h"
+#include "digital_mouse.h"
+#include "fn_keys.h"
 #include "i2c_slave.h"
+#include "key_fifo.h"
 #include "led_controller.h"
+#include "matrix_scanner.h"
+#include "modifier_manager.h"
 #include "pico/stdlib.h"
 #include "power_latch.h"
 #include "switch_tracker.h"
@@ -27,44 +32,153 @@ int main() {
     stdio_init_all();
 
     // Initialize I2C slave first (GPIOs 0 and 1)
-    i2c_slave_init(CONFIG_I2C_SLAVE_ADDRESS);
+    i2c_slave_init(CONFIG_I2C_SLAVE_ADDRESS, CONFIG_I2C_INTERRUPT_GPIO);
 
+    // Initialize power latch and start with closed latch
     power_latch_init(CONFIG_POWER_LATCH_GPIO);
-
-    // Start with a closed latch
     power_latch_close();
 
+    // Initialize power button
     button_t power_button = {0};
     button_init(&power_button, CONFIG_POWER_LATCH_GPIO, false, DEBOUNCE_MS, true, false);
 
-    button_t modifier_button = {0};
-    button_init(&modifier_button, CONFIG_MODIFIER_GPIO, false, DEBOUNCE_MS, true, false);
-
+    // Initialize LED controller
     led_controller_init(CONFIG_LED_GPIO);
+    
+    // Initialize tick service (1ms ticks)
     tick_service_init(1000);
 
+    // Initialize switch tracker for power button logic
     switch_tracker_t tracker;
     switch_tracker_init(&tracker, STARTUP_WINDOW_MS, FIRST_PRESS_HOLD_MS, LONG_PRESS_MS);
+
+    // Initialize key FIFO
+    key_fifo_t key_fifo;
+    key_fifo_init(&key_fifo);
+    i2c_slave_set_fifo(&key_fifo);
+
+    // Initialize matrix scanner
+    const uint8_t row_gpios[] = {
+        CONFIG_ROW_1_GPIO, CONFIG_ROW_2_GPIO, CONFIG_ROW_3_GPIO,
+        CONFIG_ROW_4_GPIO, CONFIG_ROW_5_GPIO, CONFIG_ROW_6_GPIO
+    };
+    const uint8_t col_gpios[] = {
+        CONFIG_COL_A_GPIO, CONFIG_COL_B_GPIO, CONFIG_COL_C_GPIO,
+        CONFIG_COL_D_GPIO, CONFIG_COL_E_GPIO, CONFIG_COL_F_GPIO,
+        CONFIG_COL_G_GPIO
+    };
+    matrix_scanner_t matrix_scanner;
+    matrix_scanner_init(&matrix_scanner, row_gpios, col_gpios, DEBOUNCE_MS);
+
+    // Initialize FN keys
+    const uint8_t fn_gpios[] = {
+        CONFIG_FN1_GPIO, CONFIG_FN2_GPIO, CONFIG_FN3_GPIO, CONFIG_FN4_GPIO,
+        CONFIG_FN5_GPIO, CONFIG_FN6_GPIO, CONFIG_FN8_GPIO, CONFIG_FN9_GPIO,
+        CONFIG_FN10_GPIO, CONFIG_FN11_GPIO, CONFIG_FN12_GPIO
+    };
+    fn_keys_t fn_keys;
+    fn_keys_init(&fn_keys, fn_gpios, DEBOUNCE_MS);
+
+    // Initialize modifier manager
+    modifier_manager_t modifier_manager;
+    uint8_t fn_key_code = matrix_get_key_code(MODIFIER_FN_ROW, MODIFIER_FN_COL);
+    uint8_t alt_key_code = matrix_get_key_code(MODIFIER_ALT_ROW, MODIFIER_ALT_COL);
+    uint8_t shift_key_code = matrix_get_key_code(MODIFIER_SHIFT_ROW, MODIFIER_SHIFT_COL);
+    modifier_manager_init(&modifier_manager, fn_key_code, alt_key_code, shift_key_code,
+                         MODIFIER_DOUBLE_PRESS_WINDOW_MS);
+
+    // Initialize digital mouse
+    digital_mouse_t digital_mouse;
+    digital_mouse_init(&digital_mouse, MOUSE_UPDATE_INTERVAL_MS);
 
     while (true) {
         if (tick_consume()) {
             uint32_t now_ms = tick_now_ms();
 
+            // Update power button
             button_update(&power_button, now_ms);
-            button_update(&modifier_button, now_ms);
-
             bool power_pressed = button_is_pressed(&power_button);
-            bool modifier_pressed = button_is_pressed(&modifier_button);
 
-            // Update I2C slave with current button states
-            i2c_slave_update_button_states(power_pressed, modifier_pressed);
-
+            // Update LED for power button state
             led_controller_set_power_pressed(power_pressed);
-            led_controller_set_modifier(modifier_pressed);
 
+            // Process power button switch tracking
             switch_event_t event = switch_tracker_tick(&tracker, power_pressed, now_ms);
             process_switch_event(event, now_ms);
 
+            // Scan matrix keyboard
+            matrix_scanner_tick(&matrix_scanner, now_ms);
+
+            // Scan FN keys
+            fn_keys_tick(&fn_keys, now_ms);
+
+            // Process matrix events
+            key_event_t matrix_event;
+            while (matrix_scanner_get_event(&matrix_scanner, &matrix_event)) {
+                bool is_modifier = false;
+
+                // Check if this is a modifier key
+                if (matrix_event.type == KEY_EVENT_PRESS) {
+                    is_modifier = modifier_manager_on_key_press(&modifier_manager, 
+                                                                matrix_event.key_code, now_ms);
+                } else if (matrix_event.type == KEY_EVENT_RELEASE) {
+                    is_modifier = modifier_manager_on_key_release(&modifier_manager, 
+                                                                  matrix_event.key_code, now_ms);
+                }
+
+                // If not a modifier, notify modifier manager of other key press
+                if (!is_modifier && matrix_event.type == KEY_EVENT_PRESS) {
+                    modifier_manager_on_other_key_press(&modifier_manager);
+                }
+
+                // Push event to FIFO
+                key_fifo_push(&key_fifo, matrix_event.type, matrix_event.key_code);
+            }
+
+            // Process FN key events
+            fn_event_t fn_event;
+            while (fn_keys_get_event(&fn_keys, &fn_event)) {
+                uint8_t fn_index = fn_event.key_code - FN_KEY_CODE_BASE;
+                
+                // FN9-FN12 control mouse movement (don't go to FIFO)
+                if (fn_index >= FN_KEY_FN9 && fn_index <= FN_KEY_FN12) {
+                    bool pressed = (fn_event.type == FN_EVENT_PRESS || fn_event.type == FN_EVENT_HOLD);
+                    digital_mouse_update_button(&digital_mouse, fn_index, pressed);
+                    // Don't push mouse movement keys to FIFO
+                    continue;
+                }
+                
+                // FN1-FN6 and FN8 are keyboard/action keys
+                // Notify modifier manager that a non-modifier key was pressed (deactivates sticky modifiers)
+                if (fn_event.type == FN_EVENT_PRESS) {
+                    modifier_manager_on_other_key_press(&modifier_manager);
+                }
+                
+                // Push to FIFO
+                key_fifo_push(&key_fifo, fn_event.type, fn_event.key_code);
+            }
+
+            // Update digital mouse position
+            digital_mouse_tick(&digital_mouse, now_ms);
+
+            // Update I2C registers
+            uint8_t modifier_mask = modifier_manager_get_active_mask(&modifier_manager);
+            i2c_slave_update_modifiers(modifier_mask);
+
+            int8_t mouse_x = digital_mouse_get_and_clear_x(&digital_mouse);
+            int8_t mouse_y = digital_mouse_get_and_clear_y(&digital_mouse);
+            i2c_slave_update_mouse(mouse_x, mouse_y);
+
+            // Notify I2C if events are available
+            if (!key_fifo_is_empty(&key_fifo)) {
+                i2c_slave_notify_events_available();
+            } else {
+                i2c_slave_check_and_clear_interrupt();
+            }
+
+            // Update LED controller based on active modifier
+            int8_t active_mod = modifier_manager_get_active_for_led(&modifier_manager);
+            led_controller_set_modifier(active_mod);
             led_controller_tick(now_ms);
         }
 

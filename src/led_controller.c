@@ -10,7 +10,7 @@
 #define PULSE_DURATION_MS 200
 
 static bool power_pressed = false;
-static bool modifier_active = false;
+static int8_t active_modifier = -1;  // -1=none, 0=FN, 1=ALT, 2=SHIFT
 static bool pulse_active = false;
 static uint32_t pulse_end_ms = 0;
 static bool blink_on = false;
@@ -28,8 +28,23 @@ static void set_idle(void) {
     set_color(CONFIG_COLOR_IDLE);
 }
 
-static void set_modifier(void) {
-    set_color(CONFIG_COLOR_MOD);
+static void set_modifier(int8_t modifier_index) {
+    uint32_t color;
+    switch (modifier_index) {
+        case 0:  // FN
+            color = CONFIG_COLOR_MOD_FN;
+            break;
+        case 1:  // ALT
+            color = CONFIG_COLOR_MOD_ALT;
+            break;
+        case 2:  // SHIFT
+            color = CONFIG_COLOR_MOD_SHIFT;
+            break;
+        default:
+            color = CONFIG_COLOR_IDLE;
+            break;
+    }
+    set_color(color);
 }
 
 static void set_power(bool on) {
@@ -45,8 +60,18 @@ static void set_pulse(void) {
 }
 
 static void refresh(uint32_t now_ms) {
-    if (modifier_active) {
-        set_modifier();
+    // Priority: Power press > Modifier > Pulse > Idle
+    if (power_pressed) {
+        if (now_ms >= next_blink_toggle_ms) {
+            blink_on = !blink_on;
+            next_blink_toggle_ms = now_ms + BLINK_INTERVAL_MS;
+        }
+        set_power(blink_on);
+        return;
+    }
+
+    if (active_modifier >= 0) {
+        set_modifier(active_modifier);
         return;
     }
 
@@ -59,15 +84,6 @@ static void refresh(uint32_t now_ms) {
         }
     }
 
-    if (power_pressed) {
-        if (now_ms >= next_blink_toggle_ms) {
-            blink_on = !blink_on;
-            next_blink_toggle_ms = now_ms + BLINK_INTERVAL_MS;
-        }
-        set_power(blink_on);
-        return;
-    }
-
     set_idle();
 }
 
@@ -76,7 +92,7 @@ void led_controller_init(uint32_t led_pin) {
     blink_on = false;
     next_blink_toggle_ms = 0;
     power_pressed = false;
-    modifier_active = false;
+    active_modifier = -1;
     pulse_active = false;
     set_idle();
 }
@@ -90,8 +106,8 @@ void led_controller_set_power_pressed(bool pressed) {
     }
 }
 
-void led_controller_set_modifier(bool pressed) {
-    modifier_active = pressed;
+void led_controller_set_modifier(int8_t modifier_index) {
+    active_modifier = modifier_index;
 }
 
 void led_controller_pulse_short_press(uint32_t now_ms) {

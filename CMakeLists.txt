@@ -15,6 +15,11 @@ add_executable(i2c_keyboard
     src/tick.c
     src/switch_tracker.c
     src/i2c_slave.c
+    src/matrix_scanner.c
+    src/fn_keys.c
+    src/modifier_manager.c
+    src/digital_mouse.c
+    src/key_fifo.c
 )
 
 pico_generate_pio_header(i2c_keyboard ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
