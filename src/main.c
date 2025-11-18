@@ -1,5 +1,6 @@
 #include "button.h"
 #include "config.h"
+#include "i2c_slave.h"
 #include "led_controller.h"
 #include "pico/stdlib.h"
 #include "power_latch.h"
@@ -24,6 +25,9 @@ static void process_switch_event(switch_event_t event, uint32_t now_ms) {
 
 int main() {
     stdio_init_all();
+
+    // Initialize I2C slave first (GPIOs 0 and 1)
+    i2c_slave_init(CONFIG_I2C_SLAVE_ADDRESS);
 
     power_latch_init(CONFIG_POWER_LATCH_GPIO);
 
@@ -51,6 +55,9 @@ int main() {
 
             bool power_pressed = button_is_pressed(&power_button);
             bool modifier_pressed = button_is_pressed(&modifier_button);
+
+            // Update I2C slave with current button states
+            i2c_slave_update_button_states(power_pressed, modifier_pressed);
 
             led_controller_set_power_pressed(power_pressed);
             led_controller_set_modifier(modifier_pressed);

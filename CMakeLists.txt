@@ -14,13 +14,14 @@ add_executable(i2c_keyboard
     src/led_controller.c
     src/tick.c
     src/switch_tracker.c
+    src/i2c_slave.c
 )
 
 pico_generate_pio_header(i2c_keyboard ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 
 target_include_directories(i2c_keyboard PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src)
 
-target_link_libraries(i2c_keyboard pico_stdlib hardware_pio hardware_timer)
+target_link_libraries(i2c_keyboard pico_stdlib hardware_pio hardware_timer hardware_i2c)
 
 pico_add_extra_outputs(i2c_keyboard)
 

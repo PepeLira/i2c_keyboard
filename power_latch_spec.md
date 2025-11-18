@@ -34,6 +34,19 @@ First define some states:
 - If a SWITCH_LONG_PRESS is detected then the power latch moves to OPEN_LATCH. 
 - If the modifier button is pressed then the led should be solid MODIFIER_COLOR till the button is release again, then it goes back to idle.
 
+## I2C Communication
+* GPIO 0 (SDA) and GPIO 1 (SCL) are reserved for I2C communication.
+* The RP2040 will act as an I2C slave device.
+* The I2C interface will be used to report the current states of the power button and modifier button to an I2C master.
+* The I2C slave address should be configurable (default value can be specified, e.g., 0x20).
+* The I2C protocol should provide a way for the master to read a status byte or register, where each bit represents the state of a button:
+* Bit 0: Power button state (1 = pressed, 0 = released)
+* Bit 1: Modifier button state (1 = pressed, 0 = released)
+* Remaining bits reserved for future use or additional buttons.
+* The I2C logic must ensure reliable, debounced button state reporting.
+* The I2C implementation must not interfere with the timing or reliability of the power latch and LED logic.
+
+
 ## Indications
 - the tick for the timer must consider 1 ms.
 - The implementation should follow good practices, a good abstraction and architecture.

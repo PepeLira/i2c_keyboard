@@ -6,6 +6,11 @@
 #define CONFIG_MODIFIER_GPIO 22
 #define CONFIG_LED_GPIO 28
 
+// I2C configuration
+#define CONFIG_I2C_SDA_GPIO 0
+#define CONFIG_I2C_SCL_GPIO 1
+#define CONFIG_I2C_SLAVE_ADDRESS 0x20
+
 // LED colors encoded as 0xRRGGBB
 #define CONFIG_COLOR_IDLE 0x001400
 #define CONFIG_COLOR_POWER 0x140000
