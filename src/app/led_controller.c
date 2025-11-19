@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "config.h"
-#include "led.h"
+#include "../config/config.h"
+#include "../hardware/led.h"
 
 #define BLINK_INTERVAL_MS 500
 #define PULSE_DURATION_MS 200

@@ -2,7 +2,7 @@
 
 #include "hardware/pio.h"
 #include "pico/stdlib.h"
-#include "ws2812.pio.h"
+#include "../build/ws2812.pio.h"
 
 #define WS2812_SM 0
 #define WS2812_FREQ 800000
